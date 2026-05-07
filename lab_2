@@ -24,8 +24,8 @@ K = 5
 print(f"K = {K}")
 print()
 
+#алгоритмический метод
 def calculate_wcss_alg(clusters, centroids):
-    #алгоритмический метод
     wcss = 0
     for i, cluster in enumerate(clusters):
         for city in cluster:
@@ -34,8 +34,8 @@ def calculate_wcss_alg(clusters, centroids):
     return wcss
 
 
+#K-средних
 def calculate_wcss_kmeans(clusters, centroids_coords):
-    #K-средних
     wcss = 0
     for i, cluster in enumerate(clusters):
         for city in cluster:
@@ -44,7 +44,7 @@ def calculate_wcss_kmeans(clusters, centroids_coords):
             wcss += dist ** 2
     return wcss
 
-print("АЛГОРИТМИЧЕСКИЙ МЕТОД (случайные центроиды, однократное распределение):")
+print("АЛГОРИТМИЧЕСКИЙ МЕТОД:")
 start_time = time.time()
 
 random_centroids = random.sample(cities, K)
@@ -77,7 +77,7 @@ print(f"\nВремя выполнения: {alg_time:.6f} секунд")
 print(f"WCSS: {wcss_alg:.2f}")
 print()
 
-print("ИТЕРАТИВНЫЙ МЕТОД K-СРЕДНИХ:")
+print("МЕТОД K-СРЕДНИХ:")
 start_time = time.time()
 
 centroids_kmeans = random.sample(cities, K)
@@ -182,9 +182,6 @@ axes[1].grid(True, alpha=0.3)
 
 plt.tight_layout()
 plt.show()
-
-
-print("Построение графика 'локоть' для выбора оптимального K...")
 
 k_range = range(1, min(11, len(cities)))
 wcss_range = []
