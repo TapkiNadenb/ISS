@@ -2,29 +2,24 @@ import random
 import math
 import time
 import matplotlib.pyplot as plt
+from sklearn.cluster import KMeans
 
 random.seed(42)
 
-#город
-cities = [{'id': i, 'name': f'Город_{i + 1}', 'x': random.randint(0, 100), 'y': random.randint(0, 100)} for i in
-          range(15)]
+cities = [{'id': i, 'name': f'Город_{i + 1}', 'x': random.randint(0, 100), 'y': random.randint(0, 100)} for i in range(15)]
 
-
+#Евклидово
 def distance(city1, city2):
     return math.sqrt((city1['x'] - city2['x']) ** 2 + (city1['y'] - city2['y']) ** 2)
 
-
-#вывод города
 print("ГОРОДА:")
 for city in cities:
     print(f"  {city['name']}: ({city['x']}, {city['y']})")
 print()
 
-K = 5
-print(f"K = {K}")
-print()
-
-#алгоритмический метод
+#Алгоритмический
+K_alg = 5
+print(f"АЛГОРИТМИЧЕСКИЙ МЕТОД (K = {K_alg})")
 def calculate_wcss_alg(clusters, centroids):
     wcss = 0
     for i, cluster in enumerate(clusters):
@@ -33,27 +28,14 @@ def calculate_wcss_alg(clusters, centroids):
             wcss += dist ** 2
     return wcss
 
-
-#K-средних
-def calculate_wcss_kmeans(clusters, centroids_coords):
-    wcss = 0
-    for i, cluster in enumerate(clusters):
-        for city in cluster:
-            dist = math.sqrt((city['x'] - centroids_coords[i][0]) ** 2 +
-                             (city['y'] - centroids_coords[i][1]) ** 2)
-            wcss += dist ** 2
-    return wcss
-
-print("АЛГОРИТМИЧЕСКИЙ МЕТОД:")
 start_time = time.time()
-
-random_centroids = random.sample(cities, K)
+random_centroids = random.sample(cities, K_alg)
 print("Случайные центроиды:")
 for i, cent in enumerate(random_centroids):
     print(f"  Кластер {i + 1}: {cent['name']} ({cent['x']}, {cent['y']})")
 print()
 
-clusters_alg = [[] for _ in range(K)]
+clusters_alg = [[] for _ in range(K_alg)]
 for city in cities:
     min_dist = float('inf')
     closest = 0
@@ -77,26 +59,61 @@ print(f"\nВремя выполнения: {alg_time:.6f} секунд")
 print(f"WCSS: {wcss_alg:.2f}")
 print()
 
-print("МЕТОД K-СРЕДНИХ:")
+# Определение оптимального K методом «локтя»
+X = [[c['x'], c['y']] for c in cities]
+max_k = min(14, len(cities))
+wcss_vals = []
+for k in range(1, max_k + 1):
+    km = KMeans(n_clusters=k, random_state=42, max_iter=10, tol=0.0001)
+    km.fit(X)
+    wcss_vals.append(km.inertia_)
+
+# Локоть
+def find_elbow(wcss):
+    n = len(wcss)
+    if n < 3:
+        return 1
+    x1, y1 = 1, wcss[0]
+    x2, y2 = n, wcss[-1]
+    d = []
+    for i, y in enumerate(wcss, start=1):
+        num = abs((x2 - x1) * (y1 - y) - (x1 - i) * (y2 - y1))
+        den = math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
+        d.append(num / den if den != 0 else 0)
+    return d.index(max(d)) + 1
+
+optimal_k = find_elbow(wcss_vals)
+print(f"Оптимальное K для K‑средних: {optimal_k}\n")
+
+def calculate_wcss_kmeans(clusters, centroids_coords):
+    wcss = 0
+    for i, cluster in enumerate(clusters):
+        for city in cluster:
+            dist = math.sqrt((city['x'] - centroids_coords[i][0]) ** 2 +
+                             (city['y'] - centroids_coords[i][1]) ** 2)
+            wcss += dist ** 2
+    return wcss
+
+print(f"РУЧНОЙ МЕТОД K‑СРЕДНИХ (K = {optimal_k}):")
 start_time = time.time()
 
-centroids_kmeans = random.sample(cities, K)
-centroids_coords = [[c['x'], c['y']] for c in centroids_kmeans]
+centroids_kmeans = random.sample(cities, optimal_k)
+centroids_coords_manual = [[c['x'], c['y']] for c in centroids_kmeans]
 
 for iteration in range(20):
-    clusters_kmeans = [[] for _ in range(K)]
+    clusters_kmeans_manual = [[] for _ in range(optimal_k)]
     for city in cities:
         min_dist = float('inf')
         closest = 0
-        for i, cent in enumerate(centroids_coords):
+        for i, cent in enumerate(centroids_coords_manual):
             dist = math.sqrt((city['x'] - cent[0]) ** 2 + (city['y'] - cent[1]) ** 2)
             if dist < min_dist:
                 min_dist = dist
                 closest = i
-        clusters_kmeans[closest].append(city)
+        clusters_kmeans_manual[closest].append(city)
 
     new_centroids = []
-    for cluster in clusters_kmeans:
+    for cluster in clusters_kmeans_manual:
         if cluster:
             avg_x = sum(c['x'] for c in cluster) / len(cluster)
             avg_y = sum(c['y'] for c in cluster) / len(cluster)
@@ -105,152 +122,117 @@ for iteration in range(20):
             new_centroids.append([0, 0])
 
     changed = False
-    for i in range(K):
-        if (abs(new_centroids[i][0] - centroids_coords[i][0]) > 0.0001 or
-                abs(new_centroids[i][1] - centroids_coords[i][1]) > 0.0001):
+    for i in range(optimal_k):
+        if (abs(new_centroids[i][0] - centroids_coords_manual[i][0]) > 0.0001 or
+                abs(new_centroids[i][1] - centroids_coords_manual[i][1]) > 0.0001):
             changed = True
             break
 
-    centroids_coords = new_centroids
+    centroids_coords_manual = new_centroids
     if not changed:
         print(f"Сошлось на итерации {iteration + 1}")
         break
 
 print("Финальные центроиды:")
-for i, cent in enumerate(centroids_coords):
+for i, cent in enumerate(centroids_coords_manual):
     print(f"  Кластер {i + 1}: ({cent[0]:.2f}, {cent[1]:.2f})")
 print()
 
 print("Кластеры:")
-for i, cluster in enumerate(clusters_kmeans):
+for i, cluster in enumerate(clusters_kmeans_manual):
     print(f"\nКластер {i + 1}:")
-    print(f"  Центроид: ({centroids_coords[i][0]:.2f}, {centroids_coords[i][1]:.2f})")
+    print(f"  Центроид: ({centroids_coords_manual[i][0]:.2f}, {centroids_coords_manual[i][1]:.2f})")
     print(f"  Города:")
     for city in cluster:
-        dist = math.sqrt((city['x'] - centroids_coords[i][0]) ** 2 + (city['y'] - centroids_coords[i][1]) ** 2)
+        dist = math.sqrt((city['x'] - centroids_coords_manual[i][0]) ** 2 + (city['y'] - centroids_coords_manual[i][1]) ** 2)
         print(f"    {city['name']} ({city['x']}, {city['y']}) -> расстояние: {dist:.2f}")
 
-kmeans_time = time.time() - start_time
-wcss_kmeans = calculate_wcss_kmeans(clusters_kmeans, centroids_coords)
-print(f"\nВремя выполнения: {kmeans_time:.6f} секунд")
-print(f"WCSS: {wcss_kmeans:.2f}")
+manual_kmeans_time = time.time() - start_time
+wcss_manual = calculate_wcss_kmeans(clusters_kmeans_manual, centroids_coords_manual)
+print(f"\nВремя выполнения: {manual_kmeans_time:.6f} секунд")
+print(f"WCSS: {wcss_manual:.2f}")
+print()
+
+print(f"БИБЛИОТЕЧНЫЙ МЕТОД K‑СРЕДНИХ (K = {optimal_k}):")
+start_time = time.time()
+
+kmeans_sk = KMeans(n_clusters=optimal_k, random_state=42, max_iter=20, tol=0.0001)
+kmeans_sk.fit(X)
+
+labels_sk = kmeans_sk.labels_
+centroids_sk = kmeans_sk.cluster_centers_
+clusters_sk = [[] for _ in range(optimal_k)]
+for city, label in zip(cities, labels_sk):
+    clusters_sk[label].append(city)
+
+print("Финальные центроиды:")
+for i, cent in enumerate(centroids_sk):
+    print(f"  Кластер {i + 1}: ({cent[0]:.2f}, {cent[1]:.2f})")
+print()
+
+print("Кластеры:")
+for i, cluster in enumerate(clusters_sk):
+    print(f"\nКластер {i + 1}:")
+    print(f"  Центроид: ({centroids_sk[i][0]:.2f}, {centroids_sk[i][1]:.2f})")
+    print(f"  Города:")
+    for city in cluster:
+        dist = math.sqrt((city['x'] - centroids_sk[i][0]) ** 2 + (city['y'] - centroids_sk[i][1]) ** 2)
+        print(f"    {city['name']} ({city['x']}, {city['y']}) -> расстояние: {dist:.2f}")
+
+sklearn_time = time.time() - start_time
+wcss_sklearn = kmeans_sk.inertia_
+print(f"\nВремя выполнения: {sklearn_time:.6f} секунд")
+print(f"WCSS (inertia): {wcss_sklearn:.2f}")
 print()
 
 print("СРАВНЕНИЕ МЕТОДОВ:")
-print(f"Алгоритмический метод: {alg_time:.6f} сек, WCSS = {wcss_alg:.2f}")
-print(f"Метод K-средних: {kmeans_time:.6f} сек, WCSS = {wcss_kmeans:.2f}")
-print(f"Разница во времени: {abs(alg_time - kmeans_time):.6f} сек")
-print(f"Разница в WCSS: {abs(wcss_alg - wcss_kmeans):.2f}")
-if alg_time < kmeans_time:
-    print("Алгоритмический метод быстрее")
-else:
-    print("Метод K-средних быстрее")
-if wcss_alg < wcss_kmeans:
-    print("Алгоритмический метод качественнее (меньше WCSS)")
-else:
-    print("Метод K-средних качественнее (меньше WCSS)")
+print(f"Алгоритмический (K={K_alg}):     {alg_time:.6f} сек, WCSS = {wcss_alg:.2f}")
+print(f"Ручной K‑средних (K={optimal_k}):   {manual_kmeans_time:.6f} сек, WCSS = {wcss_manual:.2f}")
+print(f"Библиотечный K‑средних (K={optimal_k}): {sklearn_time:.6f} сек, WCSS = {wcss_sklearn:.2f}")
 
-fig, axes = plt.subplots(1, 2, figsize=(14, 6))
-
+fig, axes = plt.subplots(1, 3, figsize=(20, 6))
 colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan']
 
 for i, cluster in enumerate(clusters_alg):
-    x_coords = [city['x'] for city in cluster]
-    y_coords = [city['y'] for city in cluster]
-    axes[0].scatter(x_coords, y_coords, c=colors[i % len(colors)], label=f'Кластер {i + 1}', alpha=0.7)
-    cent = random_centroids[i]
-    axes[0].scatter(cent['x'], cent['y'], c='black', marker='X', s=200, edgecolors='white', linewidth=2)
-axes[0].set_title(f'Алгоритмический метод (время: {alg_time:.5f} с, WCSS: {wcss_alg:.0f})')
-axes[0].set_xlabel('X координата')
-axes[0].set_ylabel('Y координата')
-axes[0].legend()
-axes[0].grid(True, alpha=0.3)
+    xs = [city['x'] for city in cluster]
+    ys = [city['y'] for city in cluster]
+    axes[0].scatter(xs, ys, c=colors[i % len(colors)], label=f'Кластер {i+1}', alpha=0.7)
+    axes[0].scatter(random_centroids[i]['x'], random_centroids[i]['y'],
+                    c='black', marker='X', s=200, edgecolors='white', linewidth=2)
+axes[0].set_title(f'Алгоритмический (K={K_alg})')
+axes[0].set_xlabel('X'); axes[0].set_ylabel('Y')
+axes[0].legend(); axes[0].grid(True, alpha=0.3)
 
+for i, cluster in enumerate(clusters_kmeans_manual):
+    xs = [city['x'] for city in cluster]
+    ys = [city['y'] for city in cluster]
+    axes[1].scatter(xs, ys, c=colors[i % len(colors)], label=f'Кластер {i+1}', alpha=0.7)
+    axes[1].scatter(centroids_coords_manual[i][0], centroids_coords_manual[i][1],
+                    c='black', marker='X', s=200, edgecolors='white', linewidth=2)
+axes[1].set_title(f'Ручной K‑средних (K={optimal_k})')
+axes[1].set_xlabel('X'); axes[1].set_ylabel('Y')
+axes[1].legend(); axes[1].grid(True, alpha=0.3)
 
-
-for i, cluster in enumerate(clusters_kmeans):
-    x_coords = [city['x'] for city in cluster]
-    y_coords = [city['y'] for city in cluster]
-    axes[1].scatter(x_coords, y_coords, c=colors[i % len(colors)], label=f'Кластер {i + 1}', alpha=0.7)
-    axes[1].scatter(centroids_coords[i][0], centroids_coords[i][1], c='black', marker='X', s=200, edgecolors='white',
-                    linewidth=2)
-axes[1].set_title(f'Метод K-средних (время: {kmeans_time:.5f} с, WCSS: {wcss_kmeans:.0f})')
-axes[1].set_xlabel('X координата')
-axes[1].set_ylabel('Y координата')
-axes[1].legend()
-axes[1].grid(True, alpha=0.3)
-
-plt.tight_layout()
-plt.show()
-
-k_range = range(1, min(11, len(cities)))
-wcss_range = []
-
-for k in k_range:
-    temp_centroids = random.sample(cities, k)
-    temp_centroids_coords = [[c['x'], c['y']] for c in temp_centroids]
-
-    for _ in range(10):
-        temp_clusters = [[] for _ in range(k)]
-        for city in cities:
-            min_dist = float('inf')
-            closest = 0
-            for i, cent in enumerate(temp_centroids_coords):
-                dist = math.sqrt((city['x'] - cent[0]) ** 2 + (city['y'] - cent[1]) ** 2)
-                if dist < min_dist:
-                    min_dist = dist
-                    closest = i
-            temp_clusters[closest].append(city)
-
-        new_coords = []
-        for cluster in temp_clusters:
-            if cluster:
-                avg_x = sum(c['x'] for c in cluster) / len(cluster)
-                avg_y = sum(c['y'] for c in cluster) / len(cluster)
-                new_coords.append([avg_x, avg_y])
-            else:
-                new_coords.append([0, 0])
-
-        changed = False
-        for i in range(k):
-            if (abs(new_coords[i][0] - temp_centroids_coords[i][0]) > 0.0001 or
-                    abs(new_coords[i][1] - temp_centroids_coords[i][1]) > 0.0001):
-                changed = True
-                break
-        temp_centroids_coords = new_coords
-        if not changed:
-            break
-
-    temp_clusters = [[] for _ in range(k)]
-    for city in cities:
-        min_dist = float('inf')
-        closest = 0
-        for i, cent in enumerate(temp_centroids_coords):
-            dist = math.sqrt((city['x'] - cent[0]) ** 2 + (city['y'] - cent[1]) ** 2)
-            if dist < min_dist:
-                min_dist = dist
-                closest = i
-        temp_clusters[closest].append(city)
-
-    wcss = 0
-    for i, cluster in enumerate(temp_clusters):
-        for city in cluster:
-            dist = math.sqrt((city['x'] - temp_centroids_coords[i][0]) ** 2 +
-                             (city['y'] - temp_centroids_coords[i][1]) ** 2)
-            wcss += dist ** 2
-    wcss_range.append(wcss)
-
-fig, ax = plt.subplots(figsize=(10, 6))
-ax.plot(list(k_range), wcss_range, 'bo-', linewidth=2, markersize=8)
-ax.set_xlabel('Количество кластеров K', fontsize=12)
-ax.set_ylabel('WCSS (сумма квадратов расстояний)', fontsize=12)
-ax.set_title('Метод "локтя" для определения оптимального K', fontsize=14)
-ax.grid(True, alpha=0.3)
-ax.axvline(x=K, color='red', linestyle='--', linewidth=2, label=f'Выбранное K = {K}')
-ax.legend()
+for i, cluster in enumerate(clusters_sk):
+    xs = [city['x'] for city in cluster]
+    ys = [city['y'] for city in cluster]
+    axes[2].scatter(xs, ys, c=colors[i % len(colors)], label=f'Кластер {i+1}', alpha=0.7)
+    axes[2].scatter(centroids_sk[i][0], centroids_sk[i][1],
+                    c='black', marker='X', s=200, edgecolors='white', linewidth=2)
+axes[2].set_title(f'Библиотечный K‑средних (K={optimal_k})')
+axes[2].set_xlabel('X'); axes[2].set_ylabel('Y')
+axes[2].legend(); axes[2].grid(True, alpha=0.3)
 
 plt.tight_layout()
 plt.show()
 
-print(f"\nОптимальное K по методу 'локтя' находится в точке изгиба графика")
-print(f"Для данного набора данных выбрано K = {K}")
+plt.figure(figsize=(10, 6))
+plt.plot(range(1, len(wcss_vals)+1), wcss_vals, 'bo-', linewidth=2, markersize=8)
+plt.axvline(x=optimal_k, color='red', linestyle='--', linewidth=2, label=f'Оптимальное K = {optimal_k}')
+plt.xlabel('Количество кластеров K')
+plt.ylabel('WCSS')
+plt.title('Метод "локтя" для автоматического выбора K')
+plt.legend()
+plt.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.show()
