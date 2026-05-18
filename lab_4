@@ -1,0 +1,117 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold
+from sklearn.preprocessing import StandardScaler
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.linear_model import Perceptron
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, ConfusionMatrixDisplay
+from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
+from sklearn.metrics import adjusted_rand_score
+
+train = pd.read_csv('disease_train.csv')
+test_public = pd.read_csv('disease_public_test.csv')
+sample_submission = pd.read_csv('disease_sample_submission.csv')
+
+target = 'Y'
+features = ['X1', 'X2', 'X3', 'X4', 'X5', 'X6', 'X7']
+
+X_train = train[features].copy()
+y_train = train[target].copy()
+
+X_test_public = test_public[features].copy()
+y_test_public = sample_submission[target].values
+
+print("Размер обучающей выборки:", X_train.shape)
+print("Распределение классов в обучающей выборке:")
+print(y_train.value_counts())
+X_train_mnb = (X_train * 100).round().astype(int)
+X_test_mnb  = (X_test_public * 100).round().astype(int)
+scaler = StandardScaler()
+X_train_perc = scaler.fit_transform(X_train)
+X_test_perc  = scaler.transform(X_test_public)
+
+mnb_raw = MultinomialNB()
+mnb_raw.fit(X_train, y_train)
+y_pred_raw_mnb = mnb_raw.predict(X_test_public)
+acc_raw_mnb = accuracy_score(y_test_public, y_pred_raw_mnb)
+
+perc_raw = Perceptron(random_state=42)
+perc_raw.fit(X_train, y_train)
+y_pred_raw_perc = perc_raw.predict(X_test_public)
+acc_raw_perc = accuracy_score(y_test_public, y_pred_raw_perc)
+
+print("\nТочность на сырых данных (public test):")
+print(f"MultinomialNB: {acc_raw_mnb:.4f}")
+print(f"Perceptron:    {acc_raw_perc:.4f}")
+
+mnb = MultinomialNB()
+mnb.fit(X_train_mnb, y_train)
+y_pred_mnb = mnb.predict(X_test_mnb)
+acc_mnb = accuracy_score(y_test_public, y_pred_mnb)
+
+perc = Perceptron(random_state=42)
+perc.fit(X_train_perc, y_train)
+y_pred_perc = perc.predict(X_test_perc)
+acc_perc = accuracy_score(y_test_public, y_pred_perc)
+
+print("\nТочность на предобработанных данных (public test):")
+print(f"MultinomialNB: {acc_mnb:.4f}")
+print(f"Perceptron:    {acc_perc:.4f}")
+skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+
+cv_scores_mnb = cross_val_score(mnb, X_train_mnb, y_train, cv=skf)
+cv_scores_perc = cross_val_score(perc, X_train_perc, y_train, cv=skf)
+
+print("\nКросс-валидация (средняя точность):")
+print(f"MultinomialNB: {cv_scores_mnb.mean():.4f} (+/- {cv_scores_mnb.std():.4f})")
+print(f"Perceptron:    {cv_scores_perc.mean():.4f} (+/- {cv_scores_perc.std():.4f})")
+
+print("\nClassification Report для MultinomialNB:")
+print(classification_report(y_test_public, y_pred_mnb, target_names=['Класс 0', 'Класс 1']))
+
+print("Classification Report для Perceptron:")
+print(classification_report(y_test_public, y_pred_perc, target_names=['Класс 0', 'Класс 1']))
+
+fig, axes = plt.subplots(1, 2, figsize=(10, 4))
+ConfusionMatrixDisplay.from_predictions(y_test_public, y_pred_mnb, ax=axes[0], colorbar=False)
+axes[0].set_title('MultinomialNB')
+ConfusionMatrixDisplay.from_predictions(y_test_public, y_pred_perc, ax=axes[1], colorbar=False)
+axes[1].set_title('Perceptron')
+plt.tight_layout()
+plt.show()
+methods = ['MultinomialNB (сырые)', 'Perceptron (сырые)', 'MultinomialNB (предобр.)', 'Perceptron (предобр.)']
+accuracies = [acc_raw_mnb, acc_raw_perc, acc_mnb, acc_perc]
+
+plt.figure(figsize=(8, 5))
+bars = plt.bar(methods, accuracies, color=['lightcoral', 'lightskyblue', 'red', 'blue'])
+plt.ylabel('Точность')
+plt.title('Сравнение точности классификаторов')
+plt.ylim(0, 1)
+for bar, acc in zip(bars, accuracies):
+    plt.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01, f'{acc:.3f}',
+             ha='center', va='bottom')
+plt.xticks(rotation=15)
+plt.grid(axis='y', linestyle='--', alpha=0.7)
+plt.tight_layout()
+plt.show()
+
+kmeans = KMeans(n_clusters=2, random_state=42, n_init=10)
+clusters = kmeans.fit_predict(X_train_perc)
+
+ari = adjusted_rand_score(y_train, clusters)
+print(f"\nКластеризация KMeans (k=2): Adjusted Rand Index = {ari:.4f}")
+
+pca = PCA(n_components=2, random_state=42)
+X_pca = pca.fit_transform(X_train_perc)
+
+plt.figure(figsize=(6, 5))
+scatter = plt.scatter(X_pca[:, 0], X_pca[:, 1], c=clusters, cmap='viridis', edgecolor='k', alpha=0.7)
+plt.xlabel('Главная компонента 1')
+plt.ylabel('Главная компонента 2')
+plt.title('Кластеры KMeans (визуализация PCA)')
+plt.legend(*scatter.legend_elements(), title='Кластер')
+plt.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.show()
