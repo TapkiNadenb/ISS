@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.linear_model import Perceptron
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, ConfusionMatrixDisplay
@@ -111,6 +111,122 @@ scatter = plt.scatter(X_pca[:, 0], X_pca[:, 1], c=clusters, cmap='viridis', edge
 plt.xlabel('Главная компонента 1')
 plt.ylabel('Главная компонента 2')
 plt.title('Кластеры KMeans (визуализация PCA)')
+plt.legend(*scatter.legend_elements(), title='Кластер')
+plt.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.show()
+
+df_flats = pd.read_excel('ml_moscow_flats_fixed.xlsx')
+print("Размер датасета квартир:", df_flats.shape)
+
+df_flats = df_flats.dropna(subset=['price']).copy()
+df_flats = df_flats.fillna(0)
+
+df_flats['price_category'] = pd.qcut(df_flats['price'], q=3, labels=[0, 1, 2])
+print("Распределение ценовых категорий:")
+print(df_flats['price_category'].value_counts())
+
+le_walls = LabelEncoder()
+df_flats['wallsMaterial'] = le_walls.fit_transform(df_flats['wallsMaterial'].astype(str))
+
+target_flat = 'price_category'
+features_flat = ['wallsMaterial', 'floorNumber', 'floorsTotal',
+                 'totalArea', 'kitchenArea', 'latitude', 'longitude']
+
+X_flat = df_flats[features_flat].copy()
+y_flat = df_flats[target_flat].copy()
+
+X_train_flat, X_test_flat, y_train_flat, y_test_flat = train_test_split(
+    X_flat, y_flat, test_size=0.2, random_state=42, stratify=y_flat)
+
+X_train_flat_mnb = (X_train_flat * 100).round().astype(int)
+X_test_flat_mnb  = (X_test_flat * 100).round().astype(int)
+
+scaler_flat = StandardScaler()
+X_train_flat_perc = scaler_flat.fit_transform(X_train_flat)
+X_test_flat_perc  = scaler_flat.transform(X_test_flat)
+
+mnb_raw_flat = MultinomialNB()
+mnb_raw_flat.fit(X_train_flat, y_train_flat)
+y_pred_raw_mnb_flat = mnb_raw_flat.predict(X_test_flat)
+acc_raw_mnb_flat = accuracy_score(y_test_flat, y_pred_raw_mnb_flat)
+
+perc_raw_flat = Perceptron(random_state=42)
+perc_raw_flat.fit(X_train_flat, y_train_flat)
+y_pred_raw_perc_flat = perc_raw_flat.predict(X_test_flat)
+acc_raw_perc_flat = accuracy_score(y_test_flat, y_pred_raw_perc_flat)
+
+print("\nТочность на сырых данных (квартиры):")
+print(f"MultinomialNB: {acc_raw_mnb_flat:.4f}")
+print(f"Perceptron:    {acc_raw_perc_flat:.4f}")
+
+mnb_flat = MultinomialNB()
+mnb_flat.fit(X_train_flat_mnb, y_train_flat)
+y_pred_mnb_flat = mnb_flat.predict(X_test_flat_mnb)
+acc_mnb_flat = accuracy_score(y_test_flat, y_pred_mnb_flat)
+
+perc_flat = Perceptron(random_state=42)
+perc_flat.fit(X_train_flat_perc, y_train_flat)
+y_pred_perc_flat = perc_flat.predict(X_test_flat_perc)
+acc_perc_flat = accuracy_score(y_test_flat, y_pred_perc_flat)
+
+print("\nТочность на предобработанных данных (квартиры):")
+print(f"MultinomialNB: {acc_mnb_flat:.4f}")
+print(f"Perceptron:    {acc_perc_flat:.4f}")
+
+skf_flat = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+cv_mnb_flat = cross_val_score(mnb_flat, X_train_flat_mnb, y_train_flat, cv=skf_flat)
+cv_perc_flat = cross_val_score(perc_flat, X_train_flat_perc, y_train_flat, cv=skf_flat)
+
+print("\nКросс-валидация (квартиры):")
+print(f"MultinomialNB: {cv_mnb_flat.mean():.4f} (+/- {cv_mnb_flat.std():.4f})")
+print(f"Perceptron:    {cv_perc_flat.mean():.4f} (+/- {cv_perc_flat.std():.4f})")
+
+print("\nClassification Report для MultinomialNB (квартиры):")
+print(classification_report(y_test_flat, y_pred_mnb_flat, target_names=['Дешёвая', 'Средняя', 'Дорогая']))
+
+print("Classification Report для Perceptron (квартиры):")
+print(classification_report(y_test_flat, y_pred_perc_flat, target_names=['Дешёвая', 'Средняя', 'Дорогая']))
+
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+ConfusionMatrixDisplay.from_predictions(y_test_flat, y_pred_mnb_flat, ax=axes[0], colorbar=False,
+                                        display_labels=['Дешёвая', 'Средняя', 'Дорогая'])
+axes[0].set_title('MultinomialNB (квартиры)')
+ConfusionMatrixDisplay.from_predictions(y_test_flat, y_pred_perc_flat, ax=axes[1], colorbar=False,
+                                        display_labels=['Дешёвая', 'Средняя', 'Дорогая'])
+axes[1].set_title('Perceptron (квартиры)')
+plt.tight_layout()
+plt.show()
+
+methods_flat = ['MNB сырые', 'Perc сырые', 'MNB предобр.', 'Perc предобр.']
+accs_flat = [acc_raw_mnb_flat, acc_raw_perc_flat, acc_mnb_flat, acc_perc_flat]
+
+plt.figure(figsize=(8, 5))
+bars = plt.bar(methods_flat, accs_flat, color=['lightcoral', 'lightskyblue', 'red', 'blue'])
+plt.ylabel('Точность')
+plt.title('Сравнение точности классификации ценовых категорий')
+plt.ylim(0, 1)
+for bar, acc in zip(bars, accs_flat):
+    plt.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01, f'{acc:.3f}',
+             ha='center', va='bottom')
+plt.grid(axis='y', linestyle='--', alpha=0.7)
+plt.tight_layout()
+plt.show()
+
+kmeans_flat = KMeans(n_clusters=3, random_state=42, n_init=10)
+clusters_flat = kmeans_flat.fit_predict(X_train_flat_perc)
+
+ari_flat = adjusted_rand_score(y_train_flat, clusters_flat)
+print(f"\nКластеризация KMeans (k=3): Adjusted Rand Index = {ari_flat:.4f}")
+
+pca_flat = PCA(n_components=2, random_state=42)
+X_pca_flat = pca_flat.fit_transform(X_train_flat_perc)
+
+plt.figure(figsize=(8, 6))
+scatter = plt.scatter(X_pca_flat[:, 0], X_pca_flat[:, 1], c=clusters_flat, cmap='viridis', edgecolor='k', alpha=0.6)
+plt.xlabel('Главная компонента 1')
+plt.ylabel('Главная компонента 2')
+plt.title('Кластеры квартир (KMeans, k=3)')
 plt.legend(*scatter.legend_elements(), title='Кластер')
 plt.grid(True, alpha=0.3)
 plt.tight_layout()
