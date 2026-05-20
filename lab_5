@@ -11,24 +11,17 @@ from sklearn.decomposition import PCA
 df = pd.read_excel('ml_moscow_flats_fixed.xlsx')
 
 print("Размер датасета:", df.shape)
-print("\nПропуски в столбцах:")
-print(df.isnull().sum())
 
 target = 'price'
 features = ['wallsMaterial', 'floorNumber', 'floorsTotal',
             'totalArea', 'kitchenArea', 'latitude', 'longitude']
 
 df = df.dropna(subset=[target]).copy()
-print(f"\nСтрок после удаления пропусков в цене: {len(df)}")
 
 df[features] = df[features].fillna(0)
 
 le = LabelEncoder()
 df['wallsMaterial'] = le.fit_transform(df['wallsMaterial'].astype(str))
-
-print("\nКодировка стен:")
-for name, code in zip(le.classes_, le.transform(le.classes_)):
-    print(f"  {name} -> {code}")
 
 X = df[features].copy()
 y = df[target].copy()
