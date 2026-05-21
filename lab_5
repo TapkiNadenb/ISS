@@ -9,15 +9,17 @@ from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 
 df = pd.read_excel('ml_moscow_flats_fixed.xlsx')
+print("Размер датасета до обработки:", df.shape)
 
-print("Размер датасета:", df.shape)
+upper_limit = df['price'].quantile(0.995)
+df = df[df['price'] <= upper_limit].copy()
+print("Размер после удаления выбросов:", df.shape)
 
 target = 'price'
 features = ['wallsMaterial', 'floorNumber', 'floorsTotal',
             'totalArea', 'kitchenArea', 'latitude', 'longitude']
 
 df = df.dropna(subset=[target]).copy()
-
 df[features] = df[features].fillna(0)
 
 le = LabelEncoder()
@@ -36,7 +38,7 @@ scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 
-print("\nСЫРЫЕ ДАННЫЕ")
+print("\nСЫРЫЕ ПРИЗНАКИ (LarsCV)")
 lars_raw = LarsCV(cv=5)
 lars_raw.fit(X_train, y_train)
 y_pred_raw = lars_raw.predict(X_test)
@@ -46,10 +48,10 @@ mae_raw = mean_absolute_error(y_test, y_pred_raw)
 rmse_raw = np.sqrt(mean_squared_error(y_test, y_pred_raw))
 
 print(f"R²:  {r2_raw:.4f}")
-print(f"MAE: {mae_raw:,.0f} руб.")
-print(f"RMSE:{rmse_raw:,.0f} руб.")
+print(f"MAE(средняя абсолютная ошибка): {mae_raw:,.0f} руб.")
+print(f"RMSE(корень из среднеквадратичной ошибки):{rmse_raw:,.0f} руб.")
 
-print("\nОЧИЩЕННЫЕ ДАННЫЕ")
+print("\nМАСШТАБИРОВАННЫЕ ПРИЗНАКИ (LarsCV)")
 lars_scaled = LarsCV(cv=5)
 lars_scaled.fit(X_train_scaled, y_train)
 y_pred_scaled = lars_scaled.predict(X_test_scaled)
@@ -61,12 +63,13 @@ rmse_scaled = np.sqrt(mean_squared_error(y_test, y_pred_scaled))
 print(f"R²:  {r2_scaled:.4f}")
 print(f"MAE: {mae_scaled:,.0f} руб.")
 print(f"RMSE:{rmse_scaled:,.0f} руб.")
+
+print("\nКРОСС-ВАЛИДАЦИЯ (R² (коэффициент детерминации))")
 cv_raw = cross_val_score(lars_raw, X, y, cv=5, scoring='r2')
 cv_scaled = cross_val_score(lars_scaled, X_train_scaled, y_train, cv=5, scoring='r2')
 
-print("\nКРОСС-ВАЛИДАЦИЯ (R²)")
-print(f"Сырые данные:      {cv_raw.mean():.4f} (+/- {cv_raw.std():.4f})")
-print(f"Очищенные данные:  {cv_scaled.mean():.4f} (+/- {cv_scaled.std():.4f})")
+print(f"Сырые признаки:      {cv_raw.mean():.4f} (+/- {cv_raw.std():.4f})")
+print(f"Масштабированные:    {cv_scaled.mean():.4f} (+/- {cv_scaled.std():.4f})")
 
 metrics_names = ['R²', 'MAE (млн)', 'RMSE (млн)']
 raw_vals = [r2_raw, mae_raw/1e6, rmse_raw/1e6]
